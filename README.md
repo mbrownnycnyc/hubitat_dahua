@@ -40,6 +40,123 @@ If you must install manually, follow these steps:
     * You can use this if you want to pause receiving real-time events for some reason.
     * `Initialize` will re-start the event stream.
 
+# Rule Machine Integration
+
+The camera driver provides extensive event attributes that can be used with Hubitat's Rule Machine to create powerful automation based on camera events. Here are some practical examples:
+
+## Smart Motion Detection Events
+
+### Human Detection Automation
+Create a rule that responds when a human is detected:
+
+In Hubitat UI:
+
+1. Go to **Apps > Rule Machine > Create New Rule**
+2. **Select Trigger Events > Choose device** > Select your camera device
+3. **Pick capability** > Select **"Custom attribute"** > **Select attribute** > **smartMotionHuman**
+4. **Event type** > Select **"changed"**
+5. **Select Actions > Add logic**:
+   * Add condition: `%value% == "detected"`
+   * Add action: Send notification "Human detected by camera with %device.smartMotionHumanConfidence% confidence"
+   * Add action: Turn on lights in the area
+6. **Save**
+
+### Vehicle Detection Automation
+Create a rule that responds to vehicle detection:
+
+1. Go to **Apps > Rule Machine > Create New Rule**
+2. **Select Trigger Events > Choose device** > Select your camera device
+3. **Pick capability** > Select **"Custom attribute"** > **Select attribute** > **smartMotionVehicle**
+4. **Event type** > Select **"changed"**
+5. **Select Actions > Add logic**:
+   * Add condition: `%value% == "detected"`
+   * Add action: Send notification "Vehicle detected by camera"
+   * Add action: Log vehicle detection to security system
+6. **Save**
+
+### Cross Line Detection for Security
+Create a rule for perimeter monitoring:
+
+1. Go to **Apps > Rule Machine > Create New Rule**
+2. **Select Trigger Events > Choose device** > Select your camera device
+3. **Pick capability** > Select **"Custom attribute"** > **Select attribute** > **crossLineDetected**
+4. **Event type** > Select **"changed"**
+5. **Select Actions > Add logic**:
+   * Add condition: `%value% != "waiting"`
+   * Add action: Send notification "Line crossing detected: %device.crossLineDetected%"
+   * Add action: Trigger security alarm
+6. **Save**
+
+### Audio Anomaly Detection
+Create a rule for unusual audio events:
+
+1. Go to **Apps > Rule Machine > Create New Rule**
+2. **Select Trigger Events > Choose device** > Select your camera device
+3. **Pick capability** > Select **"Custom attribute"** > **Select attribute** > **audioAnomaly**
+4. **Event type** > Select **"changed"**
+5. **Select Actions > Add logic**:
+   * Add condition: `%value% == "anomaly"`
+   * Add action: Send notification "Audio anomaly detected: %device.audioAnomalyType%"
+   * Add action: Start recording on all nearby cameras
+6. **Save**
+
+### Crowd Detection for Capacity Management
+Create a rule for monitoring crowd density:
+
+1. Go to **Apps > Rule Machine > Create New Rule**
+2. **Select Trigger Events > Choose device** > Select your camera device
+3. **Pick capability** > Select **"Custom attribute"** > **Select attribute** > **crowdDetection**
+4. **Event type** > Select **"changed"**
+5. **Select Actions > Add logic**:
+   * Add condition: `%value% == "detected"`
+   * Add action: Send notification "Crowd detected with density: %device.crowdDetectionDensity%"
+   * Add action: Adjust ventilation system based on crowd level
+6. **Save**
+
+## Available Event Attributes
+
+The driver provides the following event attributes that can be used in Rule Machine:
+
+### Smart Motion Detection
+- `smartMotionHuman` - Human detection status (waiting/detected)
+- `smartMotionHumanConfidence` - Human detection confidence percentage
+- `smartMotionVehicle` - Vehicle detection status (waiting/detected)
+- `smartMotionVehicleConfidence` - Vehicle detection confidence percentage
+
+### Video Status
+- `videoLoss` - Video signal status (recovered/lost)
+- `videoBlind` - Video blind status (normal/blinded)
+- `videoAbnormalDetection` - Video abnormality status (normal/abnormal)
+- `videoAbnormalType` - Type of video abnormality detected
+
+### AI Detection Events
+- `crossLineDetected` - Line crossing event (waiting/line name)
+- `crossRegionDetected` - Region intrusion event (waiting/region name)
+- `leftDetection` - Object left behind status (cleared/detected)
+- `takenAwayDetection` - Object taken away status (cleared/detected)
+- `wanderDetection` - Wander detection status (cleared/detected)
+- `rioterDetection` - Rioter detection status (cleared/detected)
+- `parkingDetection` - Parking violation status (cleared/detected)
+- `moveDetection` - Movement detection status (cleared/detected)
+- `crowdDetection` - Crowd detection status (cleared/detected)
+
+### Audio Events
+- `audioMutation` - Audio mutation status (cleared/detected)
+- `audioAnomaly` - Audio anomaly status (normal/anomaly)
+
+### System Events
+- `ntpAdjustTime` - NTP time synchronization event
+- `timeChange` - System time change event
+- `rtspSession` - RTSP session status
+
+## Tips for Rule Machine Integration
+
+1. **Use conditional logic**: Always add conditions to check the `%value%` to ensure you respond to the correct event state
+2. **Leverage secondary attributes**: Many events provide additional information (confidence, type, region) that can be used in notifications
+3. **Combine multiple triggers**: Create complex rules that respond to multiple types of events from the same camera
+4. **Test with debug logging**: Enable camera debug logging to see all events in the logs while testing your rules
+5. **Consider event frequency**: High-frequency events like motion detection may need debouncing or rate limiting in your rules
+
 # (Optional) Use the camera discovery app:
 
 **Install the app**
