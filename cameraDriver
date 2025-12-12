@@ -32,12 +32,12 @@ metadata
         capability "ImageCapture"
         capability "Initialize"
         capability "MotionSensor"
-
+        
         command "closeStream"
-
+        
         command "clearImages"
         attribute "imageTimestamp", "string"
-
+        
         attribute "crossLineDetected", "string"
         attribute "crossRegionDetected", "string"
         attribute "smartDetectType", "string"
@@ -82,7 +82,7 @@ preferences {
     }
 }
 
-def logDebug(msg)
+def logDebug(msg) 
 {
     if (logEnable)
     {
@@ -96,17 +96,17 @@ def initialize()
     {
         unschedule()
         closeStream()
-
+        
         def devInfo = queryDeviceInfo()
-        if(null == devInfo) { throw new Exception("failed to connect") }
+        if(null == devInfo) { throw new Exception("failed to connect") }        
         setDevInfo(devInfo)
-
+        
         runIn(2, openStream)
     }
     catch (Exception e)
     {
         logDebug("initialize() failed: ${e.message}")
-
+        
         reinitialize()
     }
 }
@@ -124,8 +124,8 @@ def uninstalled()
 def setupDevDetails(devDetails)
 {
     if(!devDetails) { return }
-
-    device.updateSetting("ipAddress", devDetails.ipAddress)
+    
+    device.updateSetting("ipAddress", devDetails.ipAddress)    
 }
 
 def take(channel = "1")
@@ -133,13 +133,13 @@ def take(channel = "1")
     try
     {
         def stream = doCommand("/snapshot.cgi?channel=" + channel)?.data
-
+        
         if(stream)
         {
             def bSize = stream.available()
             byte[] imageArr = new byte[bSize]
             stream.read(imageArr, 0, bSize)
-
+            
             writeImageToFile(imageArr)
             sendEvent(name: "image", value: "file:${fileName()}", isStateChange: true)
             sendEvent(name: "imageTimestamp", value: now())
@@ -156,9 +156,9 @@ def take(channel = "1")
         {
             errMsg += e.message
         }
-
-        log.error errMsg
-        return
+        
+        log.error errMsg        
+        return  
     }
     catch (Exception e)
     {
@@ -192,25 +192,25 @@ def fetchAuthHeader()
 {
     def targetUri = genBaseUri() + "/magicBox.cgi?action=getMachineName"
     def authMap = [:]
-
+    
     try
     {
-        def params =
-            [
+        def params = 
+            [ 
                 uri: targetUri,
                 headers:
                 [ Authorization: "Basic " + ("${username}:${password}").bytes.encodeBase64().toString() ]
             ]
-
+        
         _command(params)
         // we expect a 401 here to seed the digest handshake
     }
     catch(groovyx.net.http.HttpResponseException e)
     {
-        def resp = e.getResponse()
+        def resp = e.getResponse()        
         if(resp?.status?.toInteger() == 401)
         {
-            authMap = parseAuthHeader(resp?.headers?.'www-authenticate')
+            authMap = parseAuthHeader(resp?.headers?.'www-authenticate')      
         }
     }
     catch(Exception e)
@@ -221,7 +221,7 @@ def fetchAuthHeader()
     {
         setAuthMap(authMap)
         return authMap
-    }
+    }    
 }
 
 def _command(params)
@@ -244,7 +244,7 @@ def deviceQuery(suffix)
 def setDevInfo(devInfo)
 {
     state.devInfo = devInfo
-
+    
     def alias = devInfo?.machineName + " Camera"
     //device.setLabel(alias)
     //device.setName(alias)
@@ -262,10 +262,10 @@ def queryDeviceInfo()
         def machineName = deviceQuery("/magicBox.cgi?action=getMachineName")?.split("=")?.getAt(1)
         def serialNo = deviceQuery("/magicBox.cgi?action=getSerialNo")?.split("=")?.getAt(1)
         def deviceType = deviceQuery("/magicBox.cgi?action=getDeviceType")?.split("=")?.getAt(1)
-
+        
         def devInfo = [machineName: machineName, serialNo: serialNo, deviceType: deviceType]
         //logDebug(devInfo)
-
+        
         return devInfo
     }
     catch(Exception e)
@@ -316,7 +316,7 @@ def openStream()
     def codeParam = "${eventNames}"
 
     def suffix = fixupUrl("/eventManager.cgi?action=attach&codes=[${codeParam}]")
-
+    
     fetchAuthHeader()
 
     def params = genParamsHeaders(suffix)
@@ -337,18 +337,18 @@ def openStream()
 def parse(String message)
 {
     //logDebug("parse: ${message}")
-
+    
     if(message.toLowerCase()?.contains("myboundary"))
     {
         event = getEvent()
         //logDebug("event complete:\r\n ${event}")
-
+        
         if(event?.toLowerCase()?.contains("code"))
         {
             //logDebug("parse: ${message}")
             processCodeMessage("Code=" + event.split("Code=")[1])
         }
-
+        
         clearEvent()
     }
     else
@@ -361,12 +361,12 @@ def addEventLine(line)
 {
     def event = getEvent()
     if(null == event) { clearEvent() }
-
+    
     event += line
 
     setVolatileState("event", event)
 }
-
+       
 def getEvent()
 {
     return getVolatileState("event")
@@ -381,7 +381,7 @@ def processCodeMessage(message)
 {
     message = message.split(";")
     def slurper = new groovy.json.JsonSlurper()
-
+    
     def codeMap = [:]
     def member
 
@@ -395,14 +395,14 @@ def processCodeMessage(message)
                 // some firmware versions report as "data:" and some "data=",
                 //   ...so, support both
                 member = it.split('(:|=)', 2)
-
+                
                 // this is a data entry, presumably including json values
                 codeMap += [(member[0]): slurper.parseText(member[1])]
-
+                
                 // we successfully processed this entry, so don't do it again
                 return
             }
-
+            
             // after any special cases (above), parse what is left
             member = it.split("=")
             if(member.size() == 2)
@@ -416,7 +416,7 @@ def processCodeMessage(message)
             log.error "processCodeMessage() error: ${e}\r\nline contents: ${it}"
         }
     }
-
+    
     logDebug(codeMap)
     switch(codeMap?.Code)
     {
@@ -424,9 +424,32 @@ def processCodeMessage(message)
             handleDoorBellPress(codeMap)
             break
 
-        //case "AlarmLocal":
+        case "SmartMotionHuman":
+            handleSmartMotionHuman(codeMap)
+            break
+
+        case "SmartMotionVehicle":
+            handleSmartMotionVehicle(codeMap)
+            break
+
         case "VideoMotion":
             handleSimpleMotion(codeMap)
+            break
+
+        case "VideoLoss":
+            handleVideoLoss(codeMap)
+            break
+
+        case "VideoBlind":
+            handleVideoBlind(codeMap)
+            break
+
+        case "AlarmLocal":
+            handleAlarmLocal(codeMap)
+            break
+
+        case "MDResult":
+            handleMDResult(codeMap)
             break
 
         case "CrossRegionDetection":
@@ -436,8 +459,64 @@ def processCodeMessage(message)
         case "CrossLineDetection":
             handleCrossLine(codeMap)
             break
-    }
 
+        case "LeftDetection":
+            handleLeftDetection(codeMap)
+            break
+
+        case "TakenAwayDetection":
+            handleTakenAwayDetection(codeMap)
+            break
+
+        case "VideoAbnormalDetection":
+            handleVideoAbnormalDetection(codeMap)
+            break
+
+        case "AudioMutation":
+            handleAudioMutation(codeMap)
+            break
+
+        case "AudioAnomaly":
+            handleAudioAnomaly(codeMap)
+            break
+
+        case "VideoUnFocus":
+            handleVideoUnFocus(codeMap)
+            break
+
+        case "WanderDetection":
+            handleWanderDetection(codeMap)
+            break
+
+        case "RioterDetection":
+            handleRioterDetection(codeMap)
+            break
+
+        case "ParkingDetection":
+            handleParkingDetection(codeMap)
+            break
+
+        case "MoveDetection":
+            handleMoveDetection(codeMap)
+            break
+
+        case "CrowdDetection":
+            handleCrowdDetection(codeMap)
+            break
+
+        case "NTPAdjustTime":
+            handleNTPAdjustTime(codeMap)
+            break
+
+        case "TimeChange":
+            handleTimeChange(codeMap)
+            break
+
+        case "Rtsp-Session":
+            handleRtspSession(codeMap)
+            break
+    }
+    
     return codeMap
 }
 
@@ -449,7 +528,7 @@ def handleDoorBellPress(codeMap)
             devType: "doorbell",
             childType: "Generic Component Button Controller"
         ]
-
+    
     if(codeMap.data?.Action == "Invite")
     {
         logDebug("Doorbell button pressed")
@@ -459,7 +538,7 @@ def handleDoorBellPress(codeMap)
 
 def componentPush(ch, button = 1)
 {
-    ch.sendEvent(name: "pushed", value: 1, isStateChange: true)
+    ch.sendEvent(name: "pushed", value: 1, isStateChange: true)    
 }
 
 def handleSimpleMotion(codeMap)
@@ -476,7 +555,7 @@ def handleCrossRegion(codeMap)
     {
         regionName = codeMap.data?.Name
         logDebug("Cross region detected: ${regionName}")
-
+                 
         typeName = codeMap.data?.Object?.ObjectType
         logDebug("Object detected: ${typeName}")
     }
@@ -496,35 +575,215 @@ def handleCrossLine(codeMap)
 
 }
 
+def handleSmartMotionHuman(codeMap)
+{
+    def status = "waiting"
+    def confidence = "unknown"
+    if(codeMap.action == "Start")
+    {
+        status = "detected"
+        confidence = codeMap.data?.Confidence ?: "unknown"
+        logDebug("Smart motion human detected with confidence: ${confidence}%")
+    }
+    sendEvent(name: "smartMotionHuman", value: status)
+    sendEvent(name: "smartMotionHumanConfidence", value: confidence)
+}
+
+def handleSmartMotionVehicle(codeMap)
+{
+    def status = "waiting"
+    def confidence = "unknown"
+    if(codeMap.action == "Start")
+    {
+        status = "detected"
+        confidence = codeMap.data?.Confidence ?: "unknown"
+        logDebug("Smart motion vehicle detected with confidence: ${confidence}%")
+    }
+    sendEvent(name: "smartMotionVehicle", value: status)
+    sendEvent(name: "smartMotionVehicleConfidence", value: confidence)
+}
+
+def handleVideoLoss(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "lost" : "recovered"
+    logDebug("Video loss status: ${status}")
+    sendEvent(name: "videoLoss", value: status)
+}
+
+def handleVideoBlind(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "blinded" : "normal"
+    logDebug("Video blind status: ${status}")
+    sendEvent(name: "videoBlind", value: status)
+}
+
+def handleAlarmLocal(codeMap)
+{
+    def alarmType = codeMap.data?.Type ?: "unknown"
+    def status = (codeMap.action == "Start") ? "active" : "inactive"
+    logDebug("Local alarm ${alarmType} status: ${status}")
+    sendEvent(name: "alarmLocal", value: status)
+    sendEvent(name: "alarmLocalType", value: alarmType)
+}
+
+def handleMDResult(codeMap)
+{
+    def result = codeMap.data?.Result ?: "unknown"
+    logDebug("Motion detection result: ${result}")
+    sendEvent(name: "motionDetectionResult", value: result)
+}
+
+def handleLeftDetection(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def objectInfo = codeMap.data?.Object ?: "unknown"
+    logDebug("Left detection status: ${status}, object: ${objectInfo}")
+    sendEvent(name: "leftDetection", value: status)
+    sendEvent(name: "leftDetectionObject", value: objectInfo)
+}
+
+def handleTakenAwayDetection(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def objectInfo = codeMap.data?.Object ?: "unknown"
+    logDebug("Taken away detection status: ${status}, object: ${objectInfo}")
+    sendEvent(name: "takenAwayDetection", value: status)
+    sendEvent(name: "takenAwayDetectionObject", value: objectInfo)
+}
+
+def handleVideoAbnormalDetection(codeMap)
+{
+    def abnormalType = codeMap.data?.Type ?: "unknown"
+    def status = (codeMap.action == "Start") ? "abnormal" : "normal"
+    logDebug("Video abnormal detection type: ${abnormalType}, status: ${status}")
+    sendEvent(name: "videoAbnormalDetection", value: status)
+    sendEvent(name: "videoAbnormalType", value: abnormalType)
+}
+
+def handleAudioMutation(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def audioLevel = codeMap.data?.Level ?: "unknown"
+    logDebug("Audio mutation status: ${status}, level: ${audioLevel}")
+    sendEvent(name: "audioMutation", value: status)
+    sendEvent(name: "audioMutationLevel", value: audioLevel)
+}
+
+def handleAudioAnomaly(codeMap)
+{
+    def anomalyType = codeMap.data?.Type ?: "unknown"
+    def status = (codeMap.action == "Start") ? "anomaly" : "normal"
+    logDebug("Audio anomaly type: ${anomalyType}, status: ${status}")
+    sendEvent(name: "audioAnomaly", value: status)
+    sendEvent(name: "audioAnomalyType", value: anomalyType)
+}
+
+def handleVideoUnFocus(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "unfocused" : "focused"
+    def focusLevel = codeMap.data?.FocusLevel ?: "unknown"
+    logDebug("Video focus status: ${status}, level: ${focusLevel}")
+    sendEvent(name: "videoUnFocus", value: status)
+    sendEvent(name: "videoFocusLevel", value: focusLevel)
+}
+
+def handleWanderDetection(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def regionInfo = codeMap.data?.Region ?: "unknown"
+    logDebug("Wander detection status: ${status}, region: ${regionInfo}")
+    sendEvent(name: "wanderDetection", value: status)
+    sendEvent(name: "wanderDetectionRegion", value: regionInfo)
+}
+
+def handleRioterDetection(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def personCount = codeMap.data?.Count ?: "unknown"
+    logDebug("Rioter detection status: ${status}, count: ${personCount}")
+    sendEvent(name: "rioterDetection", value: status)
+    sendEvent(name: "rioterDetectionCount", value: personCount)
+}
+
+def handleParkingDetection(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def parkingInfo = codeMap.data?.Info ?: "unknown"
+    logDebug("Parking detection status: ${status}, info: ${parkingInfo}")
+    sendEvent(name: "parkingDetection", value: status)
+    sendEvent(name: "parkingDetectionInfo", value: parkingInfo)
+}
+
+def handleMoveDetection(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def moveInfo = codeMap.data?.Info ?: "unknown"
+    logDebug("Move detection status: ${status}, info: ${moveInfo}")
+    sendEvent(name: "moveDetection", value: status)
+    sendEvent(name: "moveDetectionInfo", value: moveInfo)
+}
+
+def handleCrowdDetection(codeMap)
+{
+    def status = (codeMap.action == "Start") ? "detected" : "cleared"
+    def crowdDensity = codeMap.data?.Density ?: "unknown"
+    logDebug("Crowd detection status: ${status}, density: ${crowdDensity}")
+    sendEvent(name: "crowdDetection", value: status)
+    sendEvent(name: "crowdDetectionDensity", value: crowdDensity)
+}
+
+def handleNTPAdjustTime(codeMap)
+{
+    def timeInfo = codeMap.data?.Time ?: "unknown"
+    logDebug("NTP time adjustment: ${timeInfo}")
+    sendEvent(name: "ntpAdjustTime", value: timeInfo)
+}
+
+def handleTimeChange(codeMap)
+{
+    def timeInfo = codeMap.data?.Time ?: "unknown"
+    logDebug("Time change event: ${timeInfo}")
+    sendEvent(name: "timeChange", value: timeInfo)
+}
+
+def handleRtspSession(codeMap)
+{
+    def sessionInfo = codeMap.data?.Session ?: "unknown"
+    def status = codeMap.action ?: "unknown"
+    logDebug("RTSP session ${sessionInfo}: ${status}")
+    sendEvent(name: "rtspSession", value: status)
+    sendEvent(name: "rtspSessionInfo", value: sessionInfo)
+}
+
 def getChild(Map devDetails)
 {
     if(!devDetails) { return }
-
+    
     // devDetails definition:
     //  alias      = "friendly" name of device to append to main device name from Amcrest
     //  devType    = type of device, like doorbell
     //  childType  = driver name for child
     //  childNS    = namespace for driver, or null for "hubitat"
-
+    
     def childDni = device.getDeviceNetworkId() + "-${devDetails.devType}"
-
-    def devLabel = device.getName() + " ${devDetails.alias}"
-    def props =
+    
+    def devLabel = device.getName() + " ${devDetails.alias}"    
+    def props = 
         [
             name: devLabel,
             label: devLabel,
             isComponent: false
         ]
-
+    
     def ch = getChildDevice(childDni)
-
+    
     if(!ch)
     {
         ch = addChildDevice(devDetails.childNS ?: "hubitat", devDetails.childType, childDni, props)
         ch?.setLabel(devLabel)
         ch?.setName(devLabel)
     }
-
+    
     return ch
 }
 
@@ -540,16 +799,16 @@ def genAuthUri()
 
 def fixupUrl(url)
 {
-    return url.replace('[', "%5B").replace(']', "%5D")
+    return url.replace('[', "%5B").replace(']', "%5D")    
 }
 
 def genParamsHeaders(suffix)
 {
     suffix = fixupUrl(suffix)
-
+    
     def auth = genAuthDigest(suffix)
     if(!auth) { return }
-
+    
     return [headers: [Authorization: auth]]
 }
 
@@ -557,16 +816,16 @@ def genParamsFull(suffix, withAuth = true)
 {
     suffix = fixupUrl(suffix)
     def targetUri = (withAuth ? genAuthUri() : genBaseUri()) + suffix
-
+    
     def params = [uri: targetUri]
-
+    
     return params
 }
 
 def parseAuthHeader(authHeader)
 {
     def authMap = [:]
-
+    
     if(authHeader?.toLowerCase()?.contains("digest"))
     {
         authHeader = authHeader.replace("Digest ", "")
@@ -581,24 +840,24 @@ def parseAuthHeader(authHeader)
             }
         }
     }
-
-    authMap.nc = 1
+    
+    authMap.nc = 1    
     authMap.cnonce = java.util.UUID.randomUUID().toString().replaceAll('-', '').substring(0, 8)
-
+    
     return authMap
 }
 
 def genAuthDigest(suffix)
 {
     def authMap = getAuthMap()
-
+    
     if([authMap?.realm, authMap?.nonce, authMap?.qop, authMap?.nc, authMap?.cnonce, username, password, suffix].contains(null))
     {
         return
     }
 
     authMap.cnonce = java.util.UUID.randomUUID().toString().replaceAll('-', '').substring(0, 8)
-
+    
     def ha1Raw
     switch(authMap.algorithm)
     {
@@ -606,32 +865,32 @@ def genAuthDigest(suffix)
             ha1Raw = md5([username, authMap.realm, password].join(":"))
             ha1Raw = [ha1Raw, authMap.nonce, authMap.cnonce].join(":")
             break
-
+        
         case "MD5":
         default:
             ha1Raw = [username, authMap.realm, password].join(":")
             break
     }
-
+    
     //logDebug("ha1 = ${ha1Raw}")
     def HA1 = md5(ha1Raw)
-
+    
     def ha2Raw
     switch(authMap.qop)
     {
         case "auth-int":
             // TODO: figure out entity-body; this will not work as written
             ha2Raw = ["GET", suffix, md5(entity-body)].join(":")
-
+        
         case "auth":
         default:
             ha2Raw = ["GET", suffix].join(":")
             break
     }
-
+    
     //logDebug("ha2 = ${ha2Raw}")
     def HA2 = md5(ha2Raw)
-
+    
     def respRaw
     switch(authMap.qop)
     {
@@ -639,14 +898,14 @@ def genAuthDigest(suffix)
         case "auth-init":
             respRaw = [HA1, authMap.nonce, authMap.nc, authMap.cnonce, authMap.qop, HA2].join(":")
             break
-
+        
         default:
             respRaw = [HA1, authMap.nonceHA2].join(":")
     }
-
+    
     //logDebug("respRaw = ${respRaw}")
     def response = md5(respRaw)
-
+    
     def digestMap =
         [
             username: username,
@@ -658,18 +917,18 @@ def genAuthDigest(suffix)
             opaque: authMap.opaque,
             uri: suffix
         ]
-
+    
     // need to update nonce-count for next time
     def nc = authMap.nc
     authMap.nc = ++nc
     setAuthMap(authMap)
-
-    def resp
+    
+    def resp    
     digestMap.each
     {
-        resp = addDigestMember(resp, it.key, it.value)
+        resp = addDigestMember(resp, it.key, it.value)        
     }
-
+    
     return addDigestMember(resp, "response", response, true)
 }
 
@@ -679,30 +938,30 @@ def addDigestMember(digest, name, value, last = false)
     {
         digest = "Digest "
     }
-
+    
     def eol = !last ? '", ' : '"'
     def newTerm = "${name}=\"" + value + eol
-
+    
     if(["nc", "qop"].contains(name)) { newTerm = newTerm.replaceAll('"', '') }
     digest += newTerm
-
+    
     return digest
 }
 
 def httpExec(operation, params)
-{
+{    
     def result = null
-
+    
     //logDebug("httpExec(${operation}, ${params})")
-
-    def httpClosure =
+    
+    def httpClosure = 
     { resp ->
         result = resp
         //logDebug("result.data = ${result.data}")
     }
-
+    
     def httpOp
-
+    
     switch(operation)
     {
         case "POST":
@@ -712,7 +971,7 @@ def httpExec(operation, params)
             httpOp = this.delegate.&httpGet
             break
     }
-
+    
     httpOp(params, httpClosure)
     return result
 }
@@ -733,9 +992,9 @@ def setVolatileState(name, value)
 {
     def tempState = volatileState[vsUid()] ?: [:]
     tempState.putAt(name, value)
-
+    
     volatileState.putAt(vsUid(), tempState)
-
+    
     return volatileState
 }
 
@@ -753,23 +1012,23 @@ def syncWait(data)
 def doWait()
 {
     def wtDetails = getVolatileState("syncWaitDetails")
-
+    
     // check every 200 ms whether the wait was cleared...
     if(wtDetails?.waitSetter == "")
     {
         return
     }
-
+    
     // ...or throw an exception if we ran out of tries
     if(wtDetails?.retryCount == 0)
     {
         throw new Exception("wait timed out: ${wtDetails?.waitSetter}")
     }
-
+    
     wtDetails.putAt("retryCount", wtDetails.getAt("retryCount") - 1)
-
+    
     setVolatileState("syncWaitDetails", wtDetails)
-
+    
     pauseExecution(200)
     doWait()
 }
@@ -777,7 +1036,7 @@ def doWait()
 def clearWait(data)
 {
     def wtDetails = getVolatileState("syncWaitDetails")
-
+    
     if(data.waitSetter == wtDetails?.getAt("waitSetter"))
     {
         syncWait([waitSetter: "", timeoutSec: 0])
@@ -798,14 +1057,14 @@ def clearAllWaits()
 def reinitialize()
 {
     unschedule(initialize)
-
+    
     // thanks ogiewon for the example
-
+    
     // first delay is 2 seconds, doubles every time
-    def delayCalc = (state.reconnectDelay ?: 1) * 2
+    def delayCalc = (state.reconnectDelay ?: 1) * 2    
     // upper limit is 600s
     def reconnectDelay = delayCalc <= 600 ? delayCalc : 600
-
+    
     state.reconnectDelay = reconnectDelay
     runIn(reconnectDelay, initialize)
 }
@@ -813,24 +1072,24 @@ def reinitialize()
 def eventStreamStatus(String message)
 {
     logDebug("eventStreamStatus: ${message}")
-
+    
     // thanks for the idea: https://community.hubitat.com/t/websocket-client/11843/15
     if(message?.toLowerCase()?.contains("start"))
     {
         state.reconnectDelay = 1
         setWasExpectedClose(false)
         setStreamActive(true)
-
+        
         return
     }
-
+    
     if(message?.toLowerCase()?.contains("stop"))
     {
         clearWait([waitSetter: "closeStream"])
         setStreamActive(false)
         streamStopErrorActions()
     }
-
+    
     if(message?.toLowerCase()?.contains("error"))
     {
         streamStopErrorActions()
@@ -844,7 +1103,7 @@ def streamStopErrorActions()
         setWasExpectedClose(false)
         return
     }
-
+    
     reinitialize()
 }
 
@@ -903,7 +1162,7 @@ def fileName()
 def writeImageToFile(byte[] image)
 {
     if(null == image) { return }
-
+    
     uploadHubFile(fileName(), image)
 }
 
@@ -919,34 +1178,34 @@ def deleteImageFile(fileName = fileName())
 def strReaderToString(reader)
 {
     if(null == reader) { return }
-
+    
     // https://stackoverflow.com/a/17751100
     java.lang.StringBuilder builder = new java.lang.StringBuilder()
-
+    
     // non-zero value so we read at least once
     int charsRead = 1
     char[] chars = new char[1024]
-
+    
     while(charsRead > 0)
     {
         charsRead = reader.read(chars, 0, chars.length)
         if(charsRead>0) { builder.append(chars, 0, charsRead) }
     }
-
+    
     def str = builder.toString()
-
+    
     return str
 }
 
 String md5(String strToSign)
 {
     if(null == strToSign) { return }
-
+    
     try
     {
         java.security.MessageDigest digest = java.security.MessageDigest.getInstance("MD5")
         def md5_bytes = digest.digest(strToSign.getBytes("UTF-8"))
-
+        
         return hubitat.helper.HexUtils.byteArrayToHexString(md5_bytes)?.toLowerCase()
     }
     catch(Exception e)
@@ -957,15 +1216,15 @@ String md5(String strToSign)
 
 def componentDoubleTap(ch, button = 1)
 {
-    //no_op
+    //no_op 
 }
 
 def componentHold(ch, button = 1)
 {
-    //no_op
+    //no_op 
 }
 
 def componentRelease(ch, button = 1)
 {
-    //no_op
+    //no_op 
 }
