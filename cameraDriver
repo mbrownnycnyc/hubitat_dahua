@@ -32,15 +32,62 @@ metadata
         capability "ImageCapture"
         capability "Initialize"
         capability "MotionSensor"
-        
+
         command "closeStream"
-        
+
         command "clearImages"
         attribute "imageTimestamp", "string"
-        
+
         attribute "crossLineDetected", "string"
         attribute "crossRegionDetected", "string"
         attribute "smartDetectType", "string"
+
+        // Smart Motion Detection Attributes
+        attribute "smartMotionHuman", "string"
+        attribute "smartMotionHumanConfidence", "string"
+        attribute "smartMotionVehicle", "string"
+        attribute "smartMotionVehicleConfidence", "string"
+
+        // Video Status Attributes
+        attribute "videoLoss", "string"
+        attribute "videoBlind", "string"
+        attribute "videoAbnormalDetection", "string"
+        attribute "videoAbnormalType", "string"
+        attribute "videoUnFocus", "string"
+        attribute "videoFocusLevel", "string"
+
+        // Alarm and Detection Attributes
+        attribute "alarmLocal", "string"
+        attribute "alarmLocalType", "string"
+        attribute "motionDetectionResult", "string"
+        attribute "leftDetection", "string"
+        attribute "leftDetectionObject", "string"
+        attribute "takenAwayDetection", "string"
+        attribute "takenAwayDetectionObject", "string"
+
+        // Audio Detection Attributes
+        attribute "audioMutation", "string"
+        attribute "audioMutationLevel", "string"
+        attribute "audioAnomaly", "string"
+        attribute "audioAnomalyType", "string"
+
+        // AI Detection Attributes
+        attribute "wanderDetection", "string"
+        attribute "wanderDetectionRegion", "string"
+        attribute "rioterDetection", "string"
+        attribute "rioterDetectionCount", "string"
+        attribute "parkingDetection", "string"
+        attribute "parkingDetectionInfo", "string"
+        attribute "moveDetection", "string"
+        attribute "moveDetectionInfo", "string"
+        attribute "crowdDetection", "string"
+        attribute "crowdDetectionDensity", "string"
+
+        // System Event Attributes
+        attribute "ntpAdjustTime", "string"
+        attribute "timeChange", "string"
+        attribute "rtspSession", "string"
+        attribute "rtspSessionInfo", "string"
     }
 }
 
